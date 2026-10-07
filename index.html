@@ -1,6 +1,134 @@
-<!doctype html><html lang=vi><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Nhận file bằng QR</title>
-<style>body{margin:0;font:16px system-ui;background:#111;color:#eee;text-align:center}video{width:100%;max-height:60vh;object-fit:contain;background:#000}button,a.d{font-size:18px;padding:12px 24px;margin:8px;border-radius:8px;border:0;background:#2a7;color:#fff;display:inline-block;text-decoration:none}progress{width:90%;height:20px}</style>
-<video id=v playsinline muted></video><div><button id=go>Bắt đầu quét</button></div><progress id=p value=0 max=1></progress><div id=s>Hướng camera vào mã QR trên màn hình máy tính</div><div id=o></div>
+<!doctype html><html lang=vi><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>Nhận file bằng QR - UI v2</title>
+<style>
+:root{--bg:#090d16;--card:#131b2a;--border:#202c42;--text:#e2e8f0;--muted:#8292ab;--accent:#10b981;--primary:#3b82f6;--warn:#f59e0b;--danger:#ef4444}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;font:14px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column;min-height:100vh;padding:12px;gap:10px}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600;background:var(--card);border:1px solid var(--border);color:var(--muted)}
+.pill.live{background:rgba(16,185,129,.15);border-color:var(--accent);color:var(--accent)}
+.pill.offline{background:rgba(59,130,246,.12);border-color:var(--primary);color:#60a5fa}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+.btn-icon{background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 12px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;font:inherit}
+.btn-icon:active{background:#1d283d}
+.btn-icon.active{background:rgba(245,158,11,.2);border-color:var(--warn);color:var(--warn)}
+
+#viewfinder{position:relative;width:100%;max-width:440px;aspect-ratio:1/1;margin:0 auto;background:#000;border-radius:16px;overflow:hidden;border:1px solid var(--border);display:flex;align-items:center;justify-content:center}
+#v{width:100%;height:100%;object-fit:cover}
+.corner{position:absolute;width:24px;height:24px;border:3px solid var(--accent);pointer-events:none}
+.tl{top:16px;left:16px;border-right:0;border-bottom:0;border-top-left-radius:8px}
+.tr{top:16px;right:16px;border-left:0;border-bottom:0;border-top-right-radius:8px}
+.bl{bottom:16px;left:16px;border-right:0;border-top:0;border-bottom-left-radius:8px}
+.br{bottom:16px;right:16px;border-left:0;border-top:0;border-bottom-right-radius:8px}
+.scan-line{position:absolute;left:20px;right:20px;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);pointer-events:none;animation:scan 2.4s ease-in-out infinite}
+@keyframes scan{0%{top:20px;opacity:.2}50%{top:calc(100% - 20px);opacity:.9}100%{top:20px;opacity:.2}}
+
+#blockmap-box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px;max-width:440px;margin:0 auto;width:100%}
+.box-header{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted)}
+.box-header b{color:var(--text);font-size:13px}
+#blockmap{width:100%;height:72px;background:#0b0f17;border-radius:6px;display:block}
+
+.stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;max-width:440px;margin:0 auto;width:100%}
+.stat-item{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:8px 12px;display:flex;flex-direction:column;gap:2px}
+.stat-lbl{font-size:11px;color:var(--muted)}
+.stat-val{font-size:14px;font-weight:600;color:var(--text);font-feature-settings:"tnum"}
+
+#tip-box{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);color:#fde68a;border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.4;display:flex;align-items:center;gap:10px;max-width:440px;margin:0 auto;width:100%}
+#tip-box svg{flex-shrink:0;width:18px;height:18px}
+
+.actions{display:flex;gap:10px;max-width:440px;margin:0 auto;width:100%}
+.btn-main{flex:1;background:var(--accent);color:#000;border:0;border-radius:10px;padding:14px;font-size:16px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:opacity .15s}
+.btn-main:active{opacity:.85}
+.btn-main.stop{background:var(--danger);color:#fff}
+.btn-sub{background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:14px 16px;font-size:14px;cursor:pointer}
+
+#result-box{display:none;background:var(--card);border:1px solid var(--accent);border-radius:14px;padding:16px;flex-direction:column;gap:12px;max-width:440px;margin:0 auto;width:100%;text-align:center}
+#res-title{font-size:16px;font-weight:700;color:#fff}
+#res-meta{font-size:13px;color:var(--muted)}
+#res-preview{max-height:220px;overflow:auto;background:#090d16;border-radius:8px;padding:10px;text-align:left;font-family:monospace;font-size:12px;color:#94a3b8;white-space:pre-wrap;word-break:break-all}
+#res-img-preview{max-width:100%;max-height:220px;object-fit:contain;border-radius:8px;background:#000}
+.btn-download{background:var(--accent);color:#000;text-decoration:none;font-weight:700;font-size:16px;padding:14px;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:8px}
+</style>
+<header>
+  <div class="pill" id="pill-status"><span class="dot"></span><span id="st-text">Sẵn sàng</span></div>
+  <div style="display:flex;gap:6px">
+    <button class="btn-icon" id="btn-multi" title="Quét đa mã 2x1/2x2">
+      <svg width=16 height=16 viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      <span id="lbl-multi">Đơn</span>
+    </button>
+    <button class="btn-icon" id="btn-torch" style="display:none" title="Bật/Tắt đèn pin">
+      <svg width=16 height=16 viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+    </button>
+    <button class="btn-icon" id="btn-cam" title="Chuyển camera">
+      <svg width=16 height=16 viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+    </button>
+  </div>
+</header>
+
+<div id="viewfinder">
+  <video id="v" playsinline muted></video>
+  <div class="corner tl"></div>
+  <div class="corner tr"></div>
+  <div class="corner bl"></div>
+  <div class="corner br"></div>
+  <div class="scan-line" id="scan-line" style="display:none"></div>
+</div>
+
+<div id="blockmap-box">
+  <div class="box-header">
+    <span>Bản đồ khối (<b id="lbl-known">0</b>/<b id="lbl-total">0</b>)</span>
+    <span id="lbl-percent">0%</span>
+  </div>
+  <canvas id="blockmap" width="360" height="72"></canvas>
+  <div class="box-header" style="font-size:11px">
+    <span>Đã nhận: <b id="lbl-recvd">0</b> khung</span>
+    <span>Trùng: <b id="lbl-dup">0</b> khung</span>
+  </div>
+</div>
+
+<div class="stats-grid">
+  <div class="stat-item">
+    <span class="stat-lbl">Tốc độ đọc</span>
+    <span class="stat-val" id="stat-fps">0 khung/s</span>
+  </div>
+  <div class="stat-item">
+    <span class="stat-lbl">Tỉ lệ thành công</span>
+    <span class="stat-val" id="stat-succ">0%</span>
+  </div>
+  <div class="stat-item">
+    <span class="stat-lbl">Tốc độ thực tế</span>
+    <span class="stat-val" id="stat-spd">0.0 KB/s</span>
+  </div>
+  <div class="stat-item">
+    <span class="stat-lbl">Thời gian còn lại</span>
+    <span class="stat-val" id="stat-eta">--</span>
+  </div>
+</div>
+
+<div id="tip-box">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+  <span id="tip-text">Bấm "Bắt đầu quét" và hướng camera vào mã QR</span>
+</div>
+
+<div class="actions">
+  <button class="btn-main" id="go">
+    <svg width=18 height=18 viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+    <span id="go-text">Bắt đầu quét</span>
+  </button>
+</div>
+
+<div id="result-box">
+  <div style="font-size:32px">🎉</div>
+  <div id="res-title">Đã nhận file hoàn tất!</div>
+  <div id="res-meta"></div>
+  <img id="res-img-preview" style="display:none">
+  <div id="res-preview" style="display:none"></div>
+  <a class="btn-download" id="btn-dl" download>
+    <svg width=20 height=20 viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    <span id="dl-text">Tải file về máy</span>
+  </a>
+  <button class="btn-sub" id="btn-again">Quét file khác</button>
+</div>
+
 <script type=text/plain id=jq>(function webpackUniversalModuleDefinition(root, factory) {
 	if(typeof exports === 'object' && typeof module === 'object')
 		module.exports = factory();
@@ -10127,15 +10255,448 @@ out(){const u=new Uint8Array(this.K*this.B);this.blocks.forEach((b,i)=>u.set(b,i
 }
 </script>
 <script>
-const $=i=>document.getElementById(i),dec=new Dec,v=$('v');
-try{navigator.serviceWorker.register('sw.js')}catch(e){}
-const W=new Worker(URL.createObjectURL(new Blob([$('jq').textContent+';onmessage=e=>{const d=e.data,r=jsQR(new Uint8ClampedArray(d.b),d.w,d.h,{inversionAttempts:"dontInvert"});postMessage(r&&r.binaryData?Uint8Array.from(r.binaryData):null)}'],{type:'text/javascript'})));
-let busy=0,live=0,done=0;const cv=document.createElement('canvas'),x=cv.getContext('2d',{willReadFrequently:true});
-W.onmessage=e=>{busy=0;const f=e.data;if(!f||done)return;try{if(dec.add(f))fin();ui()}catch(_){}};
-function ui(){$('p').value=dec.K?dec.known/dec.K:0;$('s').textContent=dec.K?`${dec.known}/${dec.K} khối · ${dec.n} khung đã nhận`:'Đang tìm mã QR...'}
-function loop(){if(!live)return;if(!busy&&v.videoWidth){const s=Math.min(1,1280/Math.max(v.videoWidth,v.videoHeight));cv.width=v.videoWidth*s|0;cv.height=v.videoHeight*s|0;x.drawImage(v,0,0,cv.width,cv.height);const im=x.getImageData(0,0,cv.width,cv.height);busy=1;W.postMessage({b:im.data.buffer,w:cv.width,h:cv.height},[im.data.buffer])}requestAnimationFrame(loop)}
-$('go').onclick=async()=>{try{v.srcObject=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}});await v.play();done=0;live=1;loop()}catch(e){$('s').textContent='Không mở được camera: hãy cho phép quyền camera cho trang này trong cài đặt trình duyệt, rồi bấm lại.'}};
-async function fin(){done=1;live=0;v.srcObject.getTracks().forEach(t=>t.stop());const P=dec.out();if(crc32(P)!==dec.crc){$('s').textContent='Sai checksum, hãy quét lại';dec.reset();return}
-const L=P[0],name=new TextDecoder().decode(P.subarray(1,1+L));let b=P.subarray(1+L);if(dec.flags&1)b=new Uint8Array(await new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
-const a=document.createElement('a');a.className='d';a.href=URL.createObjectURL(new Blob([b]));a.download=name;a.textContent='Tải '+name+' ('+b.length+' B)';$('o').append(a);$('s').textContent='Hoàn tất, checksum đúng.'}
+const $=i=>document.getElementById(i);
+const dec=new Dec();
+const v=$('v');
+const cv=document.createElement('canvas');
+const ctx=cv.getContext('2d',{willReadFrequently:true});
+const mapCv=$('blockmap');
+const mapCtx=mapCv.getContext('2d');
+
+let live=0,busy=0,done=0;
+let currentFacing='environment';
+let stream=null,videoTrack=null,wakeLock=null;
+let torchOn=false,multiScan=false;
+let lastKnown=0,lastProgressTime=Date.now(),lastReadTime=Date.now();
+let duplicateFrames=0;
+let scanHistory=[]; // sliding window 2s: { t, count, workerMs }
+let tipTimer=null;
+
+// Service Worker Offline Support
+try{
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('sw.js').then(reg=>{
+      const pill=$('pill-status');
+      if(reg.active){
+        pill.classList.add('offline');
+        pill.title='Đã cài, dùng được offline';
+      }
+    }).catch(()=>{});
+  }
+}catch(_){}
+
+// Worker with jsQR & Multi-region quadrant scanning
+const workerCode=$('jq').textContent+`;
+function extractSub(src,sw,sh,x,y,w,h){
+  const dst=new Uint8ClampedArray(w*h*4);
+  for(let r=0;r<h;r++){
+    const sStart=((y+r)*sw+x)*4;
+    const dStart=r*w*4;
+    dst.set(src.subarray(sStart,sStart+w*4),dStart);
+  }
+  return dst;
+}
+
+onmessage=e=>{
+  const {b,w,h,multi}=e.data;
+  const t0=performance.now();
+  const raw=new Uint8ClampedArray(b);
+  const packets=[];
+
+  // 1. Scan full image
+  const rFull=jsQR(raw,w,h,{inversionAttempts:"dontInvert"});
+  if(rFull&&rFull.binaryData){
+    packets.push(Uint8Array.from(rFull.binaryData));
+  }
+
+  // 2. Multi-QR quadrant scan (if multi enabled or no full QR found)
+  if(multi||(packets.length===0&&w>=400)){
+    const qw=Math.floor(w*0.58),qh=Math.floor(h*0.58);
+    const ox=Math.floor(w*0.42),oy=Math.floor(h*0.42);
+    const quads=[[0,0],[ox,0],[0,oy],[ox,oy]];
+
+    for(let i=0;i<quads.length;i++){
+      const [qx,qy]=quads[i];
+      const sub=extractSub(raw,w,h,qx,qy,qw,qh);
+      const rSub=jsQR(sub,qw,qh,{inversionAttempts:"dontInvert"});
+      if(rSub&&rSub.binaryData){
+        const pkt=Uint8Array.from(rSub.binaryData);
+        // Avoid duplicate in same frame (compare index at header bytes 12..15)
+        let dup=false;
+        for(let j=0;j<packets.length;j++){
+          if(packets[j].length===pkt.length&&packets[j][12]===pkt[12]&&packets[j][13]===pkt[13]&&packets[j][14]===pkt[14]&&packets[j][15]===pkt[15]){
+            dup=true;break;
+          }
+        }
+        if(!dup)packets.push(pkt);
+      }
+    }
+  }
+
+  const duration=Math.round(performance.now()-t0);
+  postMessage({packets,duration});
+};
+`;
+
+const W=new Worker(URL.createObjectURL(new Blob([workerCode],{type:'text/javascript'})));
+
+W.onmessage=e=>{
+  busy=0;
+  const {packets,duration}=e.data;
+  if(done||!live)return;
+
+  const now=Date.now();
+  let addedCount=0;
+
+  if(packets&&packets.length>0){
+    lastReadTime=now;
+    for(const pkt of packets){
+      const beforeSeen=dec.seen?dec.seen.size:0;
+      const finished=dec.add(pkt);
+      const afterSeen=dec.seen?dec.seen.size:0;
+      if(afterSeen===beforeSeen){
+        duplicateFrames++;
+      }else{
+        addedCount++;
+      }
+      if(finished){
+        fin();
+        return;
+      }
+    }
+    if(dec.known>lastKnown){
+      lastKnown=dec.known;
+      lastProgressTime=now;
+    }
+  }
+
+  // Record into sliding window
+  scanHistory.push({t:now,count:addedCount,workerMs:duration});
+  cleanOldHistory(now);
+
+  updateUI(duration);
+};
+
+function cleanOldHistory(now){
+  while(scanHistory.length&&now-scanHistory[0].t>2000){
+    scanHistory.shift();
+  }
+}
+
+function updateUI(lastWorkerMs=0){
+  const now=Date.now();
+  cleanOldHistory(now);
+
+  // 1. Block map canvas
+  drawBlockMap();
+
+  // 2. Labels
+  $('lbl-known').textContent=dec.known;
+  $('lbl-total').textContent=dec.K||0;
+  const pct=dec.K?Math.floor((dec.known/dec.K)*100):0;
+  $('lbl-percent').textContent=pct+'%';
+  $('lbl-recvd').textContent=dec.n||0;
+  $('lbl-dup').textContent=duplicateFrames;
+
+  // 3. Stats sliding window
+  const windowSec=2.0;
+  const totalPkts=scanHistory.reduce((acc,h)=>acc+h.count,0);
+  const fpsRead=(totalPkts/windowSec).toFixed(1);
+  $('stat-fps').textContent=fpsRead+' khung/s';
+
+  const succCount=scanHistory.filter(h=>h.count>0).length;
+  const succRate=scanHistory.length?Math.round((succCount/scanHistory.length)*100):0;
+  $('stat-succ').textContent=succRate+'%';
+
+  const realSpeedKb=dec.B?((totalPkts*dec.B/windowSec)/1024).toFixed(1):'0.0';
+  $('stat-spd').textContent=realSpeedKb+' KB/s';
+
+  if(dec.K&&dec.known>0&&totalPkts>0){
+    const remainingBlocks=dec.K-dec.known;
+    const blocksPerSec=totalPkts/windowSec;
+    const etaSec=Math.ceil(remainingBlocks/Math.max(0.1,blocksPerSec));
+    $('stat-eta').textContent=`~${etaSec}s`;
+  }else{
+    $('stat-eta').textContent=dec.K&&dec.known===dec.K?'Xong!':'--';
+  }
+
+  // 4. Status pill
+  const pill=$('pill-status');
+  if(live){
+    pill.classList.add('live');
+    $('st-text').textContent=dec.K?`Đang nhận (${pct}%)`:'Đang quét...';
+  }else{
+    pill.classList.remove('live');
+    $('st-text').textContent=done?'Hoàn tất':'Đã dừng';
+  }
+
+  // 5. Contextual Tips
+  updateContextualTip(now,succRate,lastWorkerMs,pct);
+}
+
+function updateContextualTip(now,succRate,workerMs,pct){
+  const tipEl=$('tip-text');
+  if(!live){
+    tipEl.textContent='Bấm "Bắt đầu quét" và hướng camera vào mã QR';
+    return;
+  }
+  if(pct>=95&&pct<100){
+    tipEl.textContent='Sắp xong, hãy giữ máy thật yên thêm một lúc!';
+  }else if(now-lastReadTime>5000){
+    tipEl.textContent='Đưa mã vào khung, thử tiến lại gần hoặc lùi ra xa một chút';
+  }else if(succRate<50&&scanHistory.length>4){
+    tipEl.textContent='Giảm độ sáng màn hình máy tính hoặc tránh góc bị lóa/phản chiếu';
+  }else if(workerMs>95){
+    tipEl.textContent='Máy xử lý chậm: hãy giảm khung/giây hoặc byte/khung ở máy gửi';
+  }else if(dec.known>0&&now-lastProgressTime>15000){
+    tipEl.textContent='Giữ máy yên. Nếu vẫn không tăng, giữ khoảng cách cố định và ổn định';
+  }else if(dec.known>0){
+    tipEl.textContent='Đang nhận dữ liệu tốt. Giữ điện thoại cố định vào mã QR.';
+  }else{
+    tipEl.textContent='Hướng camera vuông góc vào mã QR trên màn hình';
+  }
+}
+
+function drawBlockMap(){
+  const w=mapCv.width,h=mapCv.height;
+  mapCtx.fillStyle='#0b0f17';
+  mapCtx.fillRect(0,0,w,h);
+
+  const K=dec.K;
+  if(!K)return;
+
+  if(K<=300){
+    const cols=25;
+    const rows=Math.ceil(K/cols);
+    const pad=2;
+    const cw=(w-(cols+1)*pad)/cols;
+    const ch=(h-(rows+1)*pad)/rows;
+
+    for(let i=0;i<K;i++){
+      const c=i%cols;
+      const r=Math.floor(i/cols);
+      const x=pad+c*(cw+pad);
+      const y=pad+r*(ch+pad);
+      mapCtx.fillStyle=dec.blocks[i]?'#10b981':'#1e293b';
+      mapCtx.fillRect(x,y,cw,ch);
+    }
+  }else{
+    // Aggregate blocks into grid cells
+    const cols=36;
+    const rows=8;
+    const totalCells=cols*rows;
+    const pad=2;
+    const cw=(w-(cols+1)*pad)/cols;
+    const ch=(h-(rows+1)*pad)/rows;
+    const blockSize=K/totalCells;
+
+    for(let cell=0;cell<totalCells;cell++){
+      const c=cell%cols;
+      const r=Math.floor(cell/cols);
+      const startIdx=Math.floor(cell*blockSize);
+      const endIdx=Math.min(K,Math.floor((cell+1)*blockSize));
+      let solved=0,total=endIdx-startIdx;
+      for(let j=startIdx;j<endIdx;j++){
+        if(dec.blocks[j])solved++;
+      }
+      const ratio=total?solved/total:0;
+      const x=pad+c*(cw+pad);
+      const y=pad+r*(ch+pad);
+
+      if(ratio===0){
+        mapCtx.fillStyle='#1e293b';
+      }else if(ratio===1){
+        mapCtx.fillStyle='#10b981';
+      }else{
+        // interpolate color
+        mapCtx.fillStyle=`rgba(16,185,129,${Math.max(0.25,ratio.toFixed(2))})`;
+      }
+      mapCtx.fillRect(x,y,cw,ch);
+    }
+  }
+}
+
+async function startCamera(){
+  try{
+    if(stream){
+      stream.getTracks().forEach(t=>t.stop());
+    }
+    const constraints={
+      video:{
+        facingMode:currentFacing,
+        width:{ideal:1280},
+        height:{ideal:720}
+      }
+    };
+    stream=await navigator.mediaDevices.getUserMedia(constraints);
+    v.srcObject=stream;
+    await v.play();
+
+    videoTrack=stream.getVideoTracks()[0];
+    checkTorchCapability();
+
+    // Wake Lock
+    if('wakeLock' in navigator){
+      try{wakeLock=await navigator.wakeLock.request('screen')}catch(_){}
+    }
+
+    live=1;
+    done=0;
+    $('scan-line').style.display='block';
+    $('go-text').textContent='Dừng quét';
+    $('go').classList.add('stop');
+    $('result-box').style.display='none';
+    lastReadTime=Date.now();
+    lastProgressTime=Date.now();
+    loop();
+  }catch(err){
+    $('tip-text').textContent='Không mở được camera: vui lòng cấp quyền camera trong cài đặt trình duyệt.';
+  }
+}
+
+function stopCamera(){
+  live=0;
+  if(stream){
+    stream.getTracks().forEach(t=>t.stop());
+    stream=null;
+  }
+  if(wakeLock){
+    wakeLock.release().catch(()=>{});
+    wakeLock=null;
+  }
+  $('scan-line').style.display='none';
+  $('go-text').textContent='Bắt đầu quét';
+  $('go').classList.remove('stop');
+  updateUI();
+}
+
+function checkTorchCapability(){
+  try{
+    const caps=videoTrack?.getCapabilities?.();
+    if(caps&&caps.torch){
+      $('btn-torch').style.display='inline-flex';
+    }else{
+      $('btn-torch').style.display='none';
+    }
+  }catch(_){
+    $('btn-torch').style.display='none';
+  }
+}
+
+async function toggleTorch(){
+  if(!videoTrack)return;
+  try{
+    torchOn=!torchOn;
+    await videoTrack.applyConstraints({advanced:[{torch:torchOn}]});
+    $('btn-torch').classList.toggle('active',torchOn);
+  }catch(_){}
+}
+
+function toggleCamera(){
+  currentFacing=currentFacing==='environment'?'user':'environment';
+  if(live)startCamera();
+}
+
+function toggleMulti(){
+  multiScan=!multiScan;
+  $('lbl-multi').textContent=multiScan?'Đa mã':'Đơn';
+  $('btn-multi').classList.toggle('active',multiScan);
+}
+
+function loop(){
+  if(!live)return;
+  if(!busy&&v.videoWidth){
+    const s=Math.min(1,1000/Math.max(v.videoWidth,v.videoHeight));
+    cv.width=v.videoWidth*s|0;
+    cv.height=v.videoHeight*s|0;
+    ctx.drawImage(v,0,0,cv.width,cv.height);
+    const im=ctx.getImageData(0,0,cv.width,cv.height);
+    busy=1;
+    W.postMessage({b:im.data.buffer,w:cv.width,h:cv.height,multi:multiScan},[im.data.buffer]);
+  }
+  requestAnimationFrame(loop);
+}
+
+function formatBytes(bytes){
+  if(bytes<1024)return bytes+' B';
+  if(bytes<1048576)return(bytes/1024).toFixed(1)+' KB';
+  return(bytes/1048576).toFixed(2)+' MB';
+}
+
+async function fin(){
+  done=1;
+  stopCamera();
+
+  // Vibrate Android
+  try{if(navigator.vibrate)navigator.vibrate([100,50,100])}catch(_){}
+
+  const P=dec.out();
+  if(crc32(P)!==dec.crc){
+    $('tip-text').textContent='Sai checksum CRC32! Vui lòng bấm quét lại từ đầu.';
+    dec.reset();
+    updateUI();
+    return;
+  }
+
+  const L=P[0];
+  const name=new TextDecoder().decode(P.subarray(1,1+L));
+  let b=P.subarray(1+L);
+
+  if(dec.flags&1){
+    try{
+      b=new Uint8Array(await new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+    }catch(err){
+      $('tip-text').textContent='Lỗi giải nén file';
+      return;
+    }
+  }
+
+  // Show result box
+  const blob=new Blob([b]);
+  const url=URL.createObjectURL(blob);
+  $('result-box').style.display='flex';
+  $('res-title').textContent=name;
+  $('res-meta').textContent=`Dung lượng: ${formatBytes(b.length)} · Checksum CRC32: Khớp 100%`;
+
+  const dl=$('btn-dl');
+  dl.href=url;
+  dl.download=name;
+  $('dl-text').textContent=`Tải ${name} (${formatBytes(b.length)})`;
+
+  // File Preview
+  const imgPrev=$('res-img-preview');
+  const txtPrev=$('res-preview');
+  imgPrev.style.display='none';
+  txtPrev.style.display='none';
+
+  const ext=name.split('.').pop().toLowerCase();
+  if(['png','jpg','jpeg','gif','webp','svg'].includes(ext)){
+    imgPrev.src=url;
+    imgPrev.style.display='block';
+  }else if(['txt','json','csv','md','html','js','css','log','py'].includes(ext)&&b.length<=100000){
+    try{
+      txtPrev.textContent=new TextDecoder().decode(b.subarray(0,2500));
+      txtPrev.style.display='block';
+    }catch(_){}
+  }
+
+  $('tip-text').textContent='Nhận file thành công! Bạn có thể tải file về máy.';
+}
+
+$('go').onclick=()=>{
+  if(live)stopCamera();
+  else startCamera();
+};
+$('btn-cam').onclick=toggleCamera;
+$('btn-torch').onclick=toggleTorch;
+$('btn-multi').onclick=toggleMulti;
+$('btn-again').onclick=()=>{
+  dec.reset();
+  duplicateFrames=0;
+  scanHistory=[];
+  $('result-box').style.display='none';
+  startCamera();
+};
+
+updateUI();
 </script>
