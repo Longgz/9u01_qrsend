@@ -1,7 +1,7 @@
 const C='qr2';
 self.addEventListener('install',e=>{
   self.skipWaiting();
-  e.waitUntil(caches.open(C).then(c=>c.addAll(['./','index.html'])));
+  e.waitUntil(caches.open(C).then(c=>c.addAll(['./','index.html','manifest.json','icon.svg'])));
 });
 self.addEventListener('activate',e=>{
   e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==C).map(k=>caches.delete(k)))));
